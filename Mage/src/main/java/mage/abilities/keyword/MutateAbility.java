@@ -88,7 +88,7 @@ public class MutateAbility extends SpellAbility {
         if (controller != null) {
             TargetPermanent target = new TargetCreaturePermanent(filter);
             //get the non-human creature we are mutating onto
-            if (controller.choose(Outcome.BoostCreature, target, this.getSourceId(), game)) {
+            if (controller.choose(Outcome.BoostCreature, target, this, game)) {
                 Permanent targetCreature = game.getPermanent(target.getFirstTarget());
                 
                 if (targetCreature != null) {
