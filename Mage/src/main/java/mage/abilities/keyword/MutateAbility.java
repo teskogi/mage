@@ -1,5 +1,9 @@
 package mage.abilities.keyword;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 import mage.MageObject;
 import mage.abilities.Ability;
 import mage.abilities.SpellAbility;
@@ -94,8 +98,7 @@ public class MutateAbility extends SpellAbility {
                         if (ability instanceof SimpleStaticAbility){
                             for(Effect effect: ability.getEffects()){
                                 if (effect instanceof MutateEntersBattlefieldEffect){
-                                    ((MutateEntersBattlefieldEffect) effect).setNextTargetCreature(targetCreature);
-                                    ((MutateEntersBattlefieldEffect) effect).setNextOnTop(onTop);
+                                    ((MutateEntersBattlefieldEffect) effect).setNext(this.getControllerId(), targetCreature, onTop);
                                     return super.activate(game, noMana);
                                 }
                             }
@@ -113,9 +116,7 @@ class MutateEntersBattlefieldEffect extends ReplacementEffectImpl {
 
     private static final FilterCreaturePermanent filter = new FilterCreaturePermanent("non-Human creature");
     
-    private static Permanent targetCreature;
-    
-    private static boolean onTop = false;
+    private static Map<UUID, ArrayList<Object>> nextTarget = new HashMap<>();
     
     static {
         filter.add(CardType.CREATURE.getPredicate());
@@ -143,9 +144,11 @@ class MutateEntersBattlefieldEffect extends ReplacementEffectImpl {
     @Override
     public boolean replaceEvent(GameEvent event, Ability source, Game game) {
         Permanent mutatePermanent = game.getPermanentEntering(source.getSourceId());
+        ArrayList<Object> targetAndOnTop = nextTarget.remove(source.getControllerId());
         //if we have a target creature, we are mutating, otherwise we are being cast normally
-        if (mutatePermanent != null && targetCreature != null) {
-            if(onTop){
+        if (mutatePermanent != null && targetAndOnTop != null) {
+            Permanent targetCreature = (Permanent) targetAndOnTop.get(0);
+            if((boolean) targetAndOnTop.get(1)){
                 targetCreature.setName(mutatePermanent.getName());
                 targetCreature.getColor(game).setColor(mutatePermanent.getColor(game));
                 targetCreature.getManaCost().clear();
@@ -171,18 +174,17 @@ class MutateEntersBattlefieldEffect extends ReplacementEffectImpl {
                     targetCreature.setCardNumber(((Card) mutatePermanent).getCardNumber());
                     targetCreature.setExpansionSetCode(((Card) mutatePermanent).getExpansionSetCode());
                 }
-                onTop = false;
             } 
 
             for (Ability ability : mutatePermanent.getAbilities()) {
                 targetCreature.addAbility(ability, source.getSourceId(), game, false);
             }
+            targetCreature.addMergedCard(mutatePermanent.getId());
             for (Ability ability : targetCreature.getAbilities()) {
                 if(ability instanceof MutatesSourceTriggeredAbility){
                     ((MutatesSourceTriggeredAbility) ability).trigger(game, source.getControllerId(), event);
                 }
             }
-            targetCreature=null;
             return true;
         }
         return false;
@@ -192,13 +194,14 @@ class MutateEntersBattlefieldEffect extends ReplacementEffectImpl {
     public MutateEntersBattlefieldEffect copy() {
         return new MutateEntersBattlefieldEffect(this);
     }
-    
-    public void setNextTargetCreature(Permanent targetCreature){
-        this.targetCreature = targetCreature;
+        
+    public void setNext(UUID owner, Permanent targetCreature, boolean onTop){
+        ArrayList<Object> targetAndOnTop = new ArrayList<Object>();
+        targetAndOnTop.add(targetCreature);
+        targetAndOnTop.add(onTop);
+        nextTarget.remove(owner);
+        nextTarget.put(owner, targetAndOnTop);
     }
     
-    public void setNextOnTop(boolean onTop){
-        this.onTop = onTop;
-    }
     
 }

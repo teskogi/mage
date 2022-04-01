@@ -71,6 +71,18 @@ public final class ZonesHandler {
                     itr.set(unmelded);
                 }
             }
+            // Check for mutate cards.
+            Permanent permanent = game.getPermanent(info.event.getTargetId());
+            if (permanent != null && !permanent.getMergedCards().isEmpty()) {
+                for (UUID mergedId : permanent.getMergedCards()) {
+                    PermanentCard mutatePermanentCard = new PermanentCard(game.getCard(mergedId),permanent.getControllerId(),game);
+                    ZoneChangeEvent mutateEvent = new ZoneChangeEvent(mutatePermanentCard, source, permanent.getControllerId(), info.event.getFromZone(), Zone.EXILED, info.event.getAppliedEffects());
+                    ZoneChangeInfo mutateInfo = new ZoneChangeInfo(info);
+                    mutateInfo.event = mutateEvent;
+                    boolean successfullyMoved = ZonesHandler.moveCard(mutateInfo, game, source);
+                }
+                permanent.clearMergedCards();
+            }
         }
 
         // process Modal Double Faces cards (e.g. put card from hand)
@@ -313,11 +325,11 @@ public final class ZonesHandler {
             if (unmelded.subInfo.isEmpty()) {
                 return false;
             }
-            // We arbitrarily prefer the bottom half card. This should never be relevant.
+                // We arbitrarily prefer the bottom half card. This should never be relevant.
             meld.updateZoneChangeCounter(game, unmelded.subInfo.get(unmelded.subInfo.size() - 1).event);
-            return true;
-        }
-
+                return true;
+            }
+            
         // Handle all normal cases
         Card card = getTargetCard(game, event.getTargetId());
         if (card == null) {
