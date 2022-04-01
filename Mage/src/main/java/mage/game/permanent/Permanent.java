@@ -207,6 +207,8 @@ public interface Permanent extends Card, Controllable {
      * @param game
      */
     void addAbility(Ability ability, UUID sourceId, Game game);
+    
+    void addAbility(Ability ability, UUID sourceId, Game game, boolean createNewId);
 
     void removeAllAbilities(UUID sourceId, Game game);
 
@@ -396,6 +398,12 @@ public interface Permanent extends Card, Controllable {
     void setManifested(boolean value);
 
     boolean isManifested();
+    
+    void addMergedCard(UUID mergedCard);
+
+    List<UUID> getMergedCards();
+
+    void clearMergedCards();
 
     @Override
     Permanent copy();

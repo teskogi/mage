@@ -99,6 +99,7 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
     protected int attachedToZoneChangeCounter;
     protected MageObjectReference pairedPermanent;
     protected List<UUID> bandedCards = new ArrayList<>();
+    protected List<UUID> mergedCards = new ArrayList<>();
     protected Counters counters;
     protected List<MarkedDamageInfo> markedDamage;
     protected int markedLifelink;
@@ -373,11 +374,37 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
 
     @Override
     public void addAbility(Ability ability, UUID sourceId, Game game) {
+        addAbility(ability, sourceId, game, true);
+    }
+    
+    @Override
+    public void addAbility(Ability ability, UUID sourceId, Game game, boolean createNewId) {
+        /*if (!abilities.containsKey(ability.getId())) {
+            Ability copyAbility = ability.copy();
+            if (createNewId) {
+                copyAbility.newId(); // needed so that source can get an ability multiple times (e.g. Raging Ravine)
+            }
+            copyAbility.setControllerId(controllerId);
+            copyAbility.setSourceId(objectId);
+            game.getState().addAbility(copyAbility, sourceId, this);
+            abilities.add(copyAbility);
+        } else if (!createNewId) {
+            // triggered abilities must be added to the state().triggerdAbilities
+            // still as long as the prev. permanent is known to the LKI (e.g. Showstopper) so gained dies triggered ability will trigger
+            if (!game.getBattlefield().containsPermanent(this.getId())) {
+                Ability copyAbility = ability.copy();
+                copyAbility.setControllerId(controllerId);
+                copyAbility.setSourceId(objectId);
+                game.getState().addAbility(copyAbility, sourceId, this);
+            }
+        }*/
         // singleton abilities -- only one instance
         // other abilities -- any amount of instances
         if (!abilities.containsKey(ability.getId())) {
             Ability copyAbility = ability.copy();
-            copyAbility.newId(); // needed so that source can get an ability multiple times (e.g. Raging Ravine)
+            if (createNewId) {
+                copyAbility.newId(); // needed so that source can get an ability multiple times (e.g. Raging Ravine)
+            }
             copyAbility.setControllerId(controllerId);
             copyAbility.setSourceId(objectId);
             // triggered abilities must be added to the state().triggers
@@ -1659,6 +1686,21 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
     @Override
     public void setMorphed(boolean value) {
         morphed = value;
+    }
+
+    @Override
+    public void addMergedCard(UUID mergedCard) {
+        mergedCards.add(mergedCard);
+    }
+
+    @Override
+    public List<UUID> getMergedCards() {
+        return mergedCards;
+    }
+
+    @Override
+    public void clearMergedCards() {
+        mergedCards.clear();
     }
 
     @Override
