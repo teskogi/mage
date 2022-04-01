@@ -61,33 +61,15 @@ public final class ZonesHandler {
         // Handle Unmelded Meld Cards
         for (ListIterator<ZoneChangeInfo> itr = zoneChangeInfos.listIterator(); itr.hasNext(); ) {
             ZoneChangeInfo info = itr.next();
-            
-            // Check for meld cards.
-            MeldCard meld = game.getMeldCard(info.event.getTargetId());
+            MeldCard card = game.getMeldCard(info.event.getTargetId());
             // Copies should be handled as normal cards.
-            if (meld != null && !meld.isMelded(game) && !meld.isCopy()) {
-                ZoneChangeInfo.Group unmelded = new ZoneChangeInfo.Group(info, game);
-                if (meld.hasTopHalf(game)) {
-                    unmelded.addGroupedCard(meld.getTopHalfCard().getId());
-                }
-                if (meld.hasBottomHalf(game)) {
-                    unmelded.addGroupedCard(meld.getBottomHalfCard().getId());
-                }
+            if (card != null && !card.isMelded(game) && !card.isCopy()) {
+                ZoneChangeInfo.Unmelded unmelded = new ZoneChangeInfo.Unmelded(info, game);
                 if (unmelded.subInfo.isEmpty()) {
                     itr.remove();
                 } else {
                     itr.set(unmelded);
                 }
-            }
-            
-            // Check for merged cards.
-            Permanent permanent = game.getPermanent(info.event.getTargetId());
-            if (permanent != null && !permanent.getMergedCards().isEmpty()) {
-                ZoneChangeInfo.Group group = new ZoneChangeInfo.Group(info, game);
-                for (UUID mergedId : permanent.getMergedCards()) {
-                    group.addGroupedCard(mergedId);
-                }
-                itr.set(group);
             }
         }
 
@@ -138,16 +120,16 @@ public final class ZonesHandler {
 
     private static void placeInDestinationZone(ZoneChangeInfo info, Game game, int createOrder) {
         // Handle unmelded cards
-        if (info instanceof ZoneChangeInfo.Group) {
-            ZoneChangeInfo.Group group = (ZoneChangeInfo.Group) info;
+        if (info instanceof ZoneChangeInfo.Unmelded) {
+            ZoneChangeInfo.Unmelded unmelded = (ZoneChangeInfo.Unmelded) info;
             Zone toZone = null;
-            for (ZoneChangeInfo subInfo : group.subInfo) {
+            for (ZoneChangeInfo subInfo : unmelded.subInfo) {
                 toZone = subInfo.event.getToZone();
                 placeInDestinationZone(subInfo, game, createOrder);
             }
             // We arbitrarily prefer the bottom half card. This should never be relevant.
             if (toZone != null) {
-                game.setZone(group.event.getTargetId(), toZone);
+                game.setZone(unmelded.event.getTargetId(), toZone);
             }
             return;
         }
@@ -314,25 +296,25 @@ public final class ZonesHandler {
     private static boolean maybeRemoveFromSourceZone(ZoneChangeInfo info, Game game, Ability source) {
         ZoneChangeEvent event = info.event;
 
-        // Handle Grouped Cards (meld + mutate)
-        if (info instanceof ZoneChangeInfo.Group) {
-            ZoneChangeInfo.Group group = (ZoneChangeInfo.Group) info;
+        // Handle Unmelded Cards
+        if (info instanceof ZoneChangeInfo.Unmelded) {
+            ZoneChangeInfo.Unmelded unmelded = (ZoneChangeInfo.Unmelded) info;
             MeldCard meld = game.getMeldCard(event.getTargetId());
-            for (Iterator<ZoneChangeInfo> itr = group.subInfo.iterator(); itr.hasNext(); ) {
+            for (Iterator<ZoneChangeInfo> itr = unmelded.subInfo.iterator(); itr.hasNext(); ) {
                 ZoneChangeInfo subInfo = itr.next();
                 if (!maybeRemoveFromSourceZone(subInfo, game, source)) {
                     itr.remove();
-                } else if (meld != null && Objects.equals(subInfo.event.getTargetId(), meld.getTopHalfCard().getId())) {
+                } else if (Objects.equals(subInfo.event.getTargetId(), meld.getTopHalfCard().getId())) {
                     meld.setTopLastZoneChangeCounter(meld.getTopHalfCard().getZoneChangeCounter(game));
-                } else if (meld != null && Objects.equals(subInfo.event.getTargetId(), meld.getBottomHalfCard().getId())) {
+                } else if (Objects.equals(subInfo.event.getTargetId(), meld.getBottomHalfCard().getId())) {
                     meld.setBottomLastZoneChangeCounter(meld.getBottomHalfCard().getZoneChangeCounter(game));
                 }
             }
-            if (group.subInfo.isEmpty()) {
+            if (unmelded.subInfo.isEmpty()) {
                 return false;
             }
             // We arbitrarily prefer the bottom half card. This should never be relevant.
-            meld.updateZoneChangeCounter(game, group.subInfo.get(group.subInfo.size() - 1).event);
+            meld.updateZoneChangeCounter(game, unmelded.subInfo.get(unmelded.subInfo.size() - 1).event);
             return true;
         }
 

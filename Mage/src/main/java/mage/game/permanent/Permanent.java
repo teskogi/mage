@@ -398,12 +398,6 @@ public interface Permanent extends Card, Controllable {
     void setManifested(boolean value);
 
     boolean isManifested();
-    
-    void addMergedCard(UUID mergedCard);
-
-    List<UUID> getMergedCards();
-
-    void clearMergedCards();
 
     @Override
     Permanent copy();

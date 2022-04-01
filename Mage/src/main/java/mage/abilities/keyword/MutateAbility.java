@@ -3,9 +3,10 @@ package mage.abilities.keyword;
 import mage.MageObject;
 import mage.abilities.Ability;
 import mage.abilities.SpellAbility;
-import mage.abilities.common.EntersBattlefieldAbility;
+import mage.abilities.common.MutatesSourceTriggeredAbility;
 import mage.abilities.common.SimpleStaticAbility;
 import mage.abilities.costs.mana.ManaCostsImpl;
+import mage.abilities.effects.Effect;
 import mage.abilities.effects.ReplacementEffectImpl;
 import mage.cards.Card;
 import mage.constants.CardType;
@@ -13,6 +14,7 @@ import mage.constants.Duration;
 import mage.constants.Outcome;
 import mage.constants.SpellAbilityType;
 import mage.constants.SubType;
+import mage.constants.SuperType;
 import mage.constants.Zone;
 import mage.filter.common.FilterCreaturePermanent;
 import mage.filter.predicate.Predicates;
@@ -20,6 +22,9 @@ import mage.game.Game;
 import mage.game.events.GameEvent;
 import mage.game.events.GameEvent.EventType;
 import mage.game.permanent.Permanent;
+import mage.game.permanent.PermanentCard;
+import mage.game.permanent.PermanentToken;
+import mage.players.Player;
 import mage.target.TargetPermanent;
 import mage.target.common.TargetCreaturePermanent;
 
@@ -45,12 +50,10 @@ public class MutateAbility extends SpellAbility {
 
         this.setRuleAtTheTop(true);
 
-        TargetPermanent mutateTarget = new TargetCreaturePermanent(filter);
-        this.addTarget(mutateTarget);
-
         Ability ability = new SimpleStaticAbility(Zone.BATTLEFIELD, new MutateEntersBattlefieldEffect());
         ability.setRuleVisible(false);
         addSubAbility(ability);
+        
     }
 
     private MutateAbility(final MutateAbility ability) {
@@ -74,10 +77,51 @@ public class MutateAbility extends SpellAbility {
                 "They mutate into the creature on top plus all abilities from under it.)</i>";
     }
 
+    @Override
+    public boolean activate(Game game, boolean noMana) {
+        MageObject mutateObject = game.getBaseObject(this.getSourceId());
+        Player controller = game.getPlayer(this.getControllerId());
+        if (controller != null) {
+            TargetPermanent target = new TargetCreaturePermanent(filter);
+            //get the non-human creature we are mutating onto
+            if (controller.choose(Outcome.BoostCreature, target, this.getSourceId(), game)) {
+                Permanent targetCreature = game.getPermanent(target.getFirstTarget());
+                
+                if (targetCreature != null) {
+                    //get whether the entering permanent is on top
+                    boolean onTop = controller.chooseUse(Outcome.Neutral, "Entering "+mutateObject.getName()+" on top?", this, game);
+                    for(Ability ability : subAbilities){
+                        if (ability instanceof SimpleStaticAbility){
+                            for(Effect effect: ability.getEffects()){
+                                if (effect instanceof MutateEntersBattlefieldEffect){
+                                    ((MutateEntersBattlefieldEffect) effect).setNextTargetCreature(targetCreature);
+                                    ((MutateEntersBattlefieldEffect) effect).setNextOnTop(onTop);
+                                    return super.activate(game, noMana);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+    
 }
 
 class MutateEntersBattlefieldEffect extends ReplacementEffectImpl {
 
+    private static final FilterCreaturePermanent filter = new FilterCreaturePermanent("non-Human creature");
+    
+    private static Permanent targetCreature;
+    
+    private static boolean onTop = false;
+    
+    static {
+        filter.add(CardType.CREATURE.getPredicate());
+        filter.add(Predicates.not(SubType.HUMAN.getPredicate()));
+    }
+    
     public MutateEntersBattlefieldEffect() {
         super(Duration.WhileOnBattlefield, Outcome.Neutral);
     }
@@ -99,19 +143,47 @@ class MutateEntersBattlefieldEffect extends ReplacementEffectImpl {
     @Override
     public boolean replaceEvent(GameEvent event, Ability source, Game game) {
         Permanent mutatePermanent = game.getPermanentEntering(source.getSourceId());
-        if (mutatePermanent != null) {
-            // I don't really know what this code does - copied from AttachEffect.
-            // Let me know if this is unneeded.
-            int zcc = game.getState().getZoneChangeCounter(mutatePermanent.getId());
-            if (zcc == source.getSourceObjectZoneChangeCounter()
-                    || zcc == source.getSourceObjectZoneChangeCounter() + 1
-                    || zcc == source.getSourceObjectZoneChangeCounter() + 2) {
-                Permanent permanent = game.getPermanent(getTargetPointer().getFirst(game, source));
-                if (permanent != null) {
-                    permanent.addMergedCard(source.getSourceId());
-                    return true;
+        //if we have a target creature, we are mutating, otherwise we are being cast normally
+        if (mutatePermanent != null && targetCreature != null) {
+            if(onTop){
+                targetCreature.setName(mutatePermanent.getName());
+                targetCreature.getColor(game).setColor(mutatePermanent.getColor(game));
+                targetCreature.getManaCost().clear();
+                targetCreature.getManaCost().add(mutatePermanent.getManaCost());
+                targetCreature.getCardType().clear();
+                for (CardType type : mutatePermanent.getCardType()) {
+                    targetCreature.addCardType(type);
+                }
+                targetCreature.getSubtype(game).clear();
+                for (SubType type : mutatePermanent.getSubtype(game)) {
+                    targetCreature.getSubtype(game).add(type);
+                }
+                targetCreature.getSuperType().clear();
+                for (SuperType type : mutatePermanent.getSuperType()) {
+                    targetCreature.addSuperType(type);
+                }
+
+                // to get the image of the copied permanent copy number and expansionCode
+                if (mutatePermanent instanceof PermanentCard) {
+                    targetCreature.setCardNumber(((PermanentCard) mutatePermanent).getCard().getCardNumber());
+                    targetCreature.setExpansionSetCode(((PermanentCard) mutatePermanent).getCard().getExpansionSetCode());
+                } else if (mutatePermanent instanceof PermanentToken || mutatePermanent instanceof Card) {
+                    targetCreature.setCardNumber(((Card) mutatePermanent).getCardNumber());
+                    targetCreature.setExpansionSetCode(((Card) mutatePermanent).getExpansionSetCode());
+                }
+                onTop = false;
+            } 
+
+            for (Ability ability : mutatePermanent.getAbilities()) {
+                targetCreature.addAbility(ability, source.getSourceId(), game, false);
+            }
+            for (Ability ability : targetCreature.getAbilities()) {
+                if(ability instanceof MutatesSourceTriggeredAbility){
+                    ((MutatesSourceTriggeredAbility) ability).trigger(game, source.getControllerId(), event);
                 }
             }
+            targetCreature=null;
+            return true;
         }
         return false;
     }
@@ -120,5 +192,13 @@ class MutateEntersBattlefieldEffect extends ReplacementEffectImpl {
     public MutateEntersBattlefieldEffect copy() {
         return new MutateEntersBattlefieldEffect(this);
     }
-
+    
+    public void setNextTargetCreature(Permanent targetCreature){
+        this.targetCreature = targetCreature;
+    }
+    
+    public void setNextOnTop(boolean onTop){
+        this.onTop = onTop;
+    }
+    
 }

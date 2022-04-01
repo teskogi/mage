@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 import mage.abilities.Ability;
+import mage.cards.MeldCard;
 import mage.game.events.ZoneChangeEvent;
 import mage.game.stack.Spell;
 
@@ -143,23 +144,29 @@ public class ZoneChangeInfo {
         }
     }
 
-    // This class records state changes for grouped cards like Meld and Mutate.
-    public static class Group extends ZoneChangeInfo {
+    public static class Unmelded extends ZoneChangeInfo {
 
-        ZoneChangeInfo topInfo;
         List<ZoneChangeInfo> subInfo = new ArrayList<>();
 
-        public Group(ZoneChangeInfo parent, Game game) {
-            super(parent.event);
-            topInfo = parent;
+        public Unmelded(ZoneChangeInfo info, Game game) {
+            super(info.event);
+            MeldCard meld = game.getMeldCard(info.event.getTargetId());
+            if (meld != null) {
+                if (meld.hasTopHalf(game)) {
+                    ZoneChangeEvent topEvent = new ZoneChangeEvent(meld.getTopHalfCard().getId(), event.getSource(),
+                            event.getPlayerId(), event.getFromZone(), event.getToZone(), event.getAppliedEffects());
+                    ZoneChangeInfo topInfo = info.copy();
+                    topInfo.event = topEvent;
+                    subInfo.add(topInfo);
         }
-
-        public void addGroupedCard(UUID groupedCard) {
-            ZoneChangeEvent topEvent = new ZoneChangeEvent(groupedCard, event.getSource(),
+                if (meld.hasBottomHalf(game)) {
+                    ZoneChangeEvent bottomEvent = new ZoneChangeEvent(meld.getBottomHalfCard().getId(), event.getSource(),
                     event.getPlayerId(), event.getFromZone(), event.getToZone(), event.getAppliedEffects());
-            ZoneChangeInfo newSubInfo = topInfo.copy();
-            newSubInfo.event = topEvent;
-            subInfo.add(newSubInfo);
+                    ZoneChangeInfo bottomInfo = info.copy();
+                    bottomInfo.event = bottomEvent;
+                    subInfo.add(bottomInfo);
         }
+    }
+}
     }
 }
